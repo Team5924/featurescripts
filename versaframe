@@ -1,0 +1,84 @@
+
+FeatureScript 464;
+import(path : "onshape/std/geometry.fs", version : "464.0");
+
+export enum Size
+{
+    annotation { "Name" : "1x1" }
+    oneXone,
+    annotation { "Name" : "2x1" }
+    twoXone
+}
+
+export enum WallThickness
+{
+    annotation { "Name" : "0.100in" }
+    hundred,
+    annotation { "Name" : "0.040in" }
+    fourty
+}
+
+annotation { "Feature Type Name" : "VersaFrame" }
+export const versaFrame = defineFeature(function(context is Context, id is Id, definition is map)
+    precondition
+    {
+        annotation { "Name" : "Size" }
+        definition.size is Size;
+
+        annotation { "Name" : "Wall Thickness" }
+        definition.wall_thickness is WallThickness;
+
+
+        annotation { "Name" : "First Hole Offset From Center" }
+        isLength(definition.hole_offset, LENGTH_BOUNDS);
+
+        annotation { "Name" : "Length" }
+        isLength(definition.length, LENGTH_BOUNDS);
+
+        annotation { "Name" : "Hole Size Override" }
+        definition.hole_size_override is boolean;
+
+        if (definition.hole_size_override)
+        {
+            annotation { "Name" : "Hole Diameter" }
+            isLength(definition.hole_diameter, LENGTH_BOUNDS);
+
+        }
+    }
+    {
+        var width = 1 * inch;
+        var height = definition.size == Size.twoXone ? 2 * inch : 1 * inch;
+        var wall_thickness = definition.wall_thickness == WallThickness.fourty ? 0.040 * inch : 0.100 * inch;
+        var hole_diameter = definition.hole_size_override ? definition.hole_diameter : 0.163 * inch;
+
+        fCuboid(context, id + "outer_cuboid", {
+                    "corner1" : vector(0, 0, 0) * inch,
+                    "corner2" : vector(width, height, definition.length)
+                });
+
+        fCuboid(context, id + "inner_cuboid", {
+                    "corner1" : vector(wall_thickness / 2, wall_thickness / 2, 0 * inch),
+                    "corner2" : vector(width - wall_thickness / 2, height - wall_thickness / 2, definition.length)
+                });
+
+        opBoolean(context, id + "boolean1", {
+                    "tools" : qCreatedBy(id + "inner_cuboid", EntityType.BODY),
+                    "targets" : qCreatedBy(id + "outer_cuboid", EntityType.BODY),
+                    "operationType" : BooleanOperationType.SUBTRACTION
+                });
+
+        for (var i = 0; i < (definition.length - definition.hole_offset) / (1 * inch); i += 1)
+        {
+            fCylinder(context, id + i + "hole_pattern", {
+                        "topCenter" : vector(0.5 * inch, height, i * inch + definition.hole_offset),
+                        "bottomCenter" : vector(0.5 * inch, 0 * inch, i * inch + definition.hole_offset),
+                        "radius" : hole_diameter / 2
+                    });
+
+            opBoolean(context, id + i + "boolean2", {
+                        "tools" : qCreatedBy(id + i + "hole_pattern", EntityType.BODY),
+                        "targets" : qCreatedBy(id + "outer_cuboid", EntityType.BODY),
+                        "operationType" : BooleanOperationType.SUBTRACTION
+                    });
+        }
+    });

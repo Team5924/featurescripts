@@ -1,0 +1,74 @@
+
+FeatureScript 464;
+import(path : "onshape/std/geometry.fs", version : "464.0");
+
+export enum Size
+{
+    annotation { "Name" : "1/2in" }
+    half_in,
+    annotation { "Name" : "3/8in" }
+    threeeighths,
+    annotation { "Name" : "Arbitrary" }
+    arbitrary,
+}
+
+annotation { "Feature Type Name" : "Hex Hole" }
+export const hexHole = defineFeature(function(context is Context, id is Id, definition is map)
+    precondition
+    {
+        annotation { "Name" : "Size" }
+        definition.size is Size;
+
+        if (definition.size == Size.arbitrary)
+        {
+            annotation { "Name" : "Circumscribed Radius" }
+            isLength(definition.radius, LENGTH_BOUNDS);
+        }
+
+        annotation { "Name" : "Center/Origin", "Filter" : EntityType.VERTEX, "MaxNumberOfPicks" : 1 }
+        definition.center is Query;
+
+        annotation { "Name" : "Part", "Filter" : EntityType.BODY, "MaxNumberOfPicks" : 1 }
+        definition.part is Query;
+
+        annotation { "Name" : "Flip Direction" }
+        definition.direction is boolean;
+
+        annotation { "Name" : "Rotate" }
+        isAngle(definition.angle, ANGLE_360_BOUNDS);
+
+    }
+    {
+        var radius = definition.size == Size.half_in ? .289 * inch : (definition.size == Size.threeeighths ? .216 * inch : definition.radius);
+
+        var location = evaluateQuery(context, definition.center)[0];
+        var sketchPlane = evOwnerSketchPlane(context, { "entity" : location });
+        const center = worldToPlane(sketchPlane, evVertexPoint(context, { "vertex" : location }));
+
+        var sketch = newSketchOnPlane(context, id + "sketch", { "sketchPlane" : sketchPlane });
+
+        skRegularPolygon(sketch, "polygon", {
+                    "center" : vector(center[0], center[1]),
+                    "firstVertex" : rotateVec(vector(center[0], center[1]), vector(center[0], center[1] + radius), definition.angle),
+                    "sides" : 6
+                });
+
+        skSolve(sketch);
+
+        extrude(context, id + "extrude", {
+                    "entities" : qSketchRegion(id + "sketch"),
+                    "endBound" : BoundingType.THROUGH_ALL,
+                    "oppositeDirection" : definition.direction,
+                    "operationType" : NewBodyOperationType.REMOVE
+                });
+
+        opDeleteBodies(context, id + "deleteBodies", { "entities" : qCreatedBy(id + "sketch") });
+    });
+
+function rotateVec(_origin is Vector, _point is Vector, _angle is ValueWithUnits)
+{
+    var x_ = cos(_angle) * (_point[0] - _origin[0]) - sin(_angle) * (_point[1] - _origin[1]) + _origin[0];
+    var y_ = sin(_angle) * (_point[0] - _origin[0]) - cos(_angle) * (_point[1] - _origin[1]) + _origin[1];
+
+    return vector(x_, y_);
+}

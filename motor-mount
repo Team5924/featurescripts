@@ -1,0 +1,91 @@
+
+FeatureScript 464;
+import(path : "onshape/std/geometry.fs", version : "464.0");
+
+export enum Motors
+{
+    annotation { "Name" : "CIM" }
+    cim,
+    annotation { "Name" : "775pro" }
+    sevensevenfive,
+    annotation { "Name" : "Bag" }
+    bag
+}
+
+annotation { "Feature Type Name" : "Motor Mount" }
+export const motorMount = defineFeature(function(context is Context, id is Id, definition is map)
+    precondition
+    {
+        annotation { "Name" : "Motor" }
+        definition.motor is Motors;
+
+        annotation { "Name" : "Center", "Filter" : EntityType.VERTEX, "MaxNumberOfPicks" : 1 }
+        definition.center is Query;
+
+        annotation { "Name" : "Part", "Filter" : EntityType.BODY, "MaxNumberOfPicks" : 1 }
+        definition.part is Query;
+
+        annotation { "Name" : "Flip Direction" }
+        definition.direction is boolean;
+
+        annotation { "Name" : "Rotate" }
+        isAngle(definition.angle, ANGLE_360_BOUNDS);
+    }
+    {
+        var mounting_hole_diam = 0.159 * inch;
+        var mounting_hole_sep = 2 * inch;
+        var boss_diam = 0.750 * inch;
+
+        if (definition.motor == Motors.sevensevenfive)
+        {
+            mounting_hole_diam = 0.16 * inch;
+            mounting_hole_sep = 1.142 * inch;
+            boss_diam = 0.685 * inch;
+        }
+        if (definition.motor == Motors.bag)
+        {
+            mounting_hole_diam = 0.16 * inch;
+            mounting_hole_sep = .984 * inch;
+            boss_diam = 0.472 * inch;
+        }
+
+        var location = evaluateQuery(context, definition.center)[0];
+        var sketchPlane = evOwnerSketchPlane(context, { "entity" : location });
+        const center = worldToPlane(sketchPlane, evVertexPoint(context, { "vertex" : location }));
+
+        const sketch = newSketchOnPlane(context, id + "sketch", { "sketchPlane" : sketchPlane });
+
+        skCircle(sketch, "boss", {
+                    "center" : vector(center[0], center[1]),
+                    "radius" : boss_diam / 2
+                });
+
+        skCircle(sketch, "mounting_hole1", {
+                    "center" : rotateVec(vector(center[0], center[1]), vector(center[0] - mounting_hole_sep / 2, center[1]), definition.angle),
+                    "radius" : mounting_hole_diam / 2
+                });
+
+        skCircle(sketch, "mounting_hole2", {
+                    "center" : rotateVec(vector(center[0], center[1]), vector(center[0] + mounting_hole_sep / 2, center[1]), definition.angle),
+                    "radius" : mounting_hole_diam / 2
+                });
+
+        skSolve(sketch);
+
+        extrude(context, id + "extrude", {
+                    "entities" : qSketchRegion(id + "sketch"),
+                    "endBound" : BoundingType.THROUGH_ALL,
+                    "oppositeDirection" : definition.direction,
+                    "operationType" : NewBodyOperationType.REMOVE
+                });
+
+        opDeleteBodies(context, id + "deleteBodies", { "entities" : qCreatedBy(id + "sketch") });
+    });
+
+function rotateVec(_origin is Vector, _point is Vector, _angle is ValueWithUnits)
+{
+    var x_ = cos(_angle) * (_point[0] - _origin[0]) - sin(_angle) * (_point[1] - _origin[1]) + _origin[0];
+    var y_ = sin(_angle) * (_point[0] - _origin[0]) - cos(_angle) * (_point[1] - _origin[1]) + _origin[1];
+
+    return vector(x_, y_);
+}
