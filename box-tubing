@@ -1,0 +1,63 @@
+FeatureScript 442;
+import(path : "onshape/std/geometry.fs", version : "442.0");
+
+annotation { "Feature Type Name" : "Box Tubing" }
+export const myFeature = defineFeature(function(context is Context, id is Id, definition is map)
+    precondition
+    {
+        // Define the parameters of the feature type
+
+        annotation { "Name" : "Oirigin", "Filter" : EntityType.VERTEX, "MaxNumberOfPicks" : 1 }
+        definition.origin is Query;
+
+        annotation { "Name" : "Square" }
+        definition.isSquare is boolean;
+
+        if (!definition.isSquare)
+        {
+            annotation { "Name" : "Width" }
+            isLength(definition.width, LENGTH_BOUNDS);
+
+            annotation { "Name" : "Height" }
+            isLength(definition.height, LENGTH_BOUNDS);
+
+        }
+        else
+        {
+            annotation { "Name" : "Width" }
+            isLength(definition.side_length, LENGTH_BOUNDS);
+        }
+
+        annotation { "Name" : "Wall Thickness" }
+        isLength(definition.wall_thickness, LENGTH_BOUNDS);
+
+        annotation { "Name" : "Length" }
+        isLength(definition.length, LENGTH_BOUNDS);
+    }
+    {
+        var square = definition.isSquare;
+        var width = definition.width;
+        var height = definition.height;
+        
+        
+        if (square) {
+            width = definition.side_length;
+            height = definition.side_length;
+        }
+
+        fCuboid(context, id + "cuboid1", {
+                    "corner1" : vector(0, 0, 0) * inch,
+                    "corner2" : vector(width, height, definition.length)
+                });
+        
+        fCuboid(context, id + "cuboid2", {
+                    "corner1" : vector(definition.wall_thickness, definition.wall_thickness, 0*inch),
+                    "corner2" : vector(width-definition.wall_thickness, height-definition.wall_thickness, definition.length)
+                });
+                
+        opBoolean(context, id + "boolean1", {
+                "tools" : qCreatedBy(id + "cuboid2", EntityType.BODY),
+                "targets" : qCreatedBy(id + "cuboid1", EntityType.BODY),
+                "operationType" : BooleanOperationType.SUBTRACTION
+        });
+    });
